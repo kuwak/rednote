@@ -20,11 +20,7 @@ const handleResponse = async (response: Response) => {
 
 /**
  * 超强鲁棒性的 JSON 提取与修复工具。
- * 专门解决 AI 在生成小红书标签数组时产生的各种奇葩错误：
- * 1. #"标签" -> "#标签" (井号错位)
- * 2. #标签 -> "#标签" (未加引号)
- * 3. 尾部逗号
- * 4. 包含在 Markdown 代码块外的杂乱文本
+ * 针对 AI 常见的格式错误进行多步清洗。
  */
 const extractJson = (content: string) => {
   if (!content) throw new Error("AI 响应内容为空");
@@ -53,7 +49,6 @@ const extractJson = (content: string) => {
   };
 
   try {
-    // 尝试直接解析
     return JSON.parse(candidate);
   } catch (e) {
     console.warn("直接解析 JSON 失败，尝试进行深度清洗...");
@@ -62,7 +57,6 @@ const extractJson = (content: string) => {
       return JSON.parse(sanitized);
     } catch (finalError) {
       console.error("深度清洗后依然解析失败。原始内容:", candidate);
-      // 最后的兜底：尝试更激进的修复，专门针对 tags 数组
       try {
         const ultraSanitized = candidate.replace(/"tags"\s*:\s*\[([\s\S]*?)\]/g, (match, arrayContent) => {
            const fixedArray = arrayContent
@@ -76,7 +70,7 @@ const extractJson = (content: string) => {
         });
         return JSON.parse(sanitize(ultraSanitized));
       } catch (e3) {
-        throw new Error("AI 返回的 JSON 格式严重受损，请点击“开始策划”重试一次。");
+        throw new Error("AI 返回的 JSON 格式严重受损，请重新尝试。");
       }
     }
   }
@@ -112,8 +106,8 @@ export const generateCopywriting = async (apiKey: string, product: ProductInfo):
 
     要求：
     1. 标题吸引人，包含 Emoji。
-    2. 正文分段清晰，使用小红书风格的语气。
-    3. tags 数组必须严格使用 ["#标签1", "#标签2"] 格式，禁止任何引号错误。
+    2. 正文分段清晰，使用小红书风格。
+    3. tags 数组必须严格使用 ["#标签1", "#标签2"] 格式。
     
     输出格式示例：
     {
@@ -129,30 +123,39 @@ export const generateCopywriting = async (apiKey: string, product: ProductInfo):
 export const generateImageAnalysisAndPrompt = async (apiKey: string, product: ProductInfo): Promise<{ analysis: ImageAnalysis, qualityReport: QualityReport, prompt: string }> => {
   const prompt = `
     你是一位顶尖商业摄影策划。
-    任务：为【${product.name}】策划小红书封面。
+    任务：根据以下“黄金信息三角”为【${product.name}】策划一张小红书风格封面图并生成英文生图 Prompt。
 
-    特别要求：
-    - 枕头产品需体现【自然的慢回弹凹陷感】，像被头压过一样，看起来非常软糯舒适。
-    - 整体构图高级，光影通透。
+    【黄金信息三角】
+    1. 产品主体：${product.name} (品类: ${product.category})
+    2. 物理细节：${product.features} (造型依据)
+    3. 卖点与调性：${product.sellingPoints} / 预期风格: ${product.tone}
+    4. 目标用户：${product.targetAudience} (决定场景精细度)
+
+    【封面策划要求 - 严格遵循模版】
+    - 主题与情绪：创造一个视觉故事（如：松弛的清晨），情绪需呼应“${product.tone}”。
+    - 视觉化卖点：如果卖点包含舒适/柔软/支撑，画面必须体现。特别是枕头类产品，必须呈现自然的【回弹凹陷感】，体现被头部压出的弧度，质感软糯实心。
+    - 场景与构图：将产品置于理想化场景（如：${product.targetAudience}向往的极简卧室）。
+    - 强化调性：生活化质感，电影感滤镜。
+    - 严禁：文字、价格、杂乱背景、完整人脸。
 
     请严格输出 JSON 对象：
     {
       "analysis": {
-        "form": "形态描述",
+        "form": "主体形态描述",
         "texture": "质感描述",
         "light": "光影方案",
         "atmosphere": "情绪词",
-        "style": "风格",
-        "composition": "构图",
-        "setting": "环境描述"
+        "style": "摄影风格",
+        "composition": "构图方案",
+        "setting": "场景环境描述"
       },
       "qualityReport": {
-        "subject": {"score": 9.8, "reason": "描述"},
-        "function": {"score": 9.5, "reason": "描述"},
-        "structure": {"score": 9.9, "reason": "描述"},
-        "concept": {"score": 9.7, "reason": "描述"}
+        "subject": {"score": 9.8, "reason": "描述形态符合度"},
+        "function": {"score": 9.5, "reason": "描述卖点视觉化程度"},
+        "structure": {"score": 9.9, "reason": "描述光影高级感"},
+        "concept": {"score": 9.7, "reason": "描述场景代入感"}
       },
-      "finalPrompt": "Professional commercial photography for ${product.name}, soft bed scene, ${product.features}, aesthetic lighting, 8k resolution."
+      "finalPrompt": "英文生图提示词: [A high-end commercial shot of ${product.name} featuring ${product.features} in a lifestyle setting for ${product.targetAudience}. Cinematic lighting, ergonomic pillow with soft head indentation, soft bed sheets, minimalist room, ${product.tone} atmosphere, 8k, photorealistic, shallow depth of field, minimalist aesthetic, no text.]"
     }
   `;
 
