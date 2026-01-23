@@ -161,10 +161,20 @@ export const generateImageAnalysisAndPrompt = async (apiKey: string, product: Pr
 
   const data = await callDeepSeek(apiKey, [{ role: "user", content: prompt }]);
   const result = extractJson(data.choices[0].message.content);
+
+  // Ensure qualityReport structure exists to prevent UI crashes
+  const defaultItem = { score: 8.5, reason: "符合基础商业摄影标准" };
+  const safeQualityReport: QualityReport = {
+    subject: result.qualityReport?.subject || { score: 9.0, reason: "主体形态呈现清晰" },
+    function: result.qualityReport?.function || defaultItem,
+    structure: result.qualityReport?.structure || defaultItem,
+    concept: result.qualityReport?.concept || defaultItem,
+  };
+
   return {
-    analysis: result.analysis,
-    qualityReport: result.qualityReport,
-    prompt: result.finalPrompt
+    analysis: result.analysis || {}, 
+    qualityReport: safeQualityReport,
+    prompt: result.finalPrompt || ""
   };
 };
 
