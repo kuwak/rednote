@@ -1,5 +1,4 @@
 import { ProductInfo, GeneratedCopy, ImageAnalysis, QualityReport } from '../types';
-import { GoogleGenAI } from "@google/genai";
 
 const BASE_URL = "https://router.shengsuanyun.com/api/v1";
 
@@ -77,6 +76,10 @@ const extractJson = (content: string) => {
 };
 
 const callDeepSeek = async (apiKey: string, messages: any[]) => {
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('API密钥未配置，请在设置中配置LLM API密钥');
+  }
+  
   const response = await fetch(`${BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -117,7 +120,18 @@ export const generateCopywriting = async (apiKey: string, product: ProductInfo):
     }
   `;
   const data = await callDeepSeek(apiKey, [{ role: "user", content: prompt }]);
-  return extractJson(data.choices[0].message.content);
+  
+  if (!data?.choices?.[0]?.message?.content) {
+    throw new Error('API 返回的响应格式不正确，未找到内容');
+  }
+  
+  const result = extractJson(data.choices[0].message.content);
+  
+  if (!result.title || !result.content || !Array.isArray(result.tags)) {
+    throw new Error('API 返回的数据不完整，缺少必要的字段（title、content 或 tags）');
+  }
+  
+  return result;
 };
 
 export const generateImageAnalysisAndPrompt = async (apiKey: string, product: ProductInfo): Promise<{ analysis: ImageAnalysis, qualityReport: QualityReport, prompt: string }> => {
@@ -160,7 +174,17 @@ export const generateImageAnalysisAndPrompt = async (apiKey: string, product: Pr
   `;
 
   const data = await callDeepSeek(apiKey, [{ role: "user", content: prompt }]);
+  
+  if (!data?.choices?.[0]?.message?.content) {
+    throw new Error('API 返回的响应格式不正确，未找到内容');
+  }
+  
   const result = extractJson(data.choices[0].message.content);
+  
+  if (!result.analysis || !result.qualityReport || !result.finalPrompt) {
+    throw new Error('API 返回的数据不完整，缺少必要的字段（analysis、qualityReport 或 finalPrompt）');
+  }
+  
   return {
     analysis: result.analysis,
     qualityReport: result.qualityReport,
@@ -168,27 +192,138 @@ export const generateImageAnalysisAndPrompt = async (apiKey: string, product: Pr
   };
 };
 
+/**
+ * 轮询任务状态直到完成
+ */
+const pollTaskStatus = async (apiKey: string, taskId: string, maxAttempts: number = 60): Promise<string> => {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+    
+    try {
+      const response = await fetch(`https://router.shengsuanyun.com/api/v1/tasks/${taskId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`获取任务状态失败: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // 检查任务状态
+      if (data.status === 'completed' || data.status === 'succeeded') {
+        // 查找图片URL
+        if (data.result?.images && data.result.images.length > 0) {
+          return data.result.images[0];
+        }
+        if (data.images && data.images.length > 0) {
+          return data.images[0];
+        }
+        if (data.result?.image) {
+          return data.result.image;
+        }
+        if (data.image) {
+          return data.image;
+        }
+        throw new Error('任务完成但未找到图片URL');
+      }
+      
+      if (data.status === 'failed' || data.status === 'error') {
+        throw new Error(`任务失败: ${data.error || data.message || '未知错误'}`);
+      }
+      
+      // 继续轮询
+    } catch (error) {
+      if (i === maxAttempts - 1) {
+        throw error;
+      }
+      // 继续重试
+    }
+  }
+  
+  throw new Error('任务超时，请稍后重试');
+};
+
 export const generateCoverImage = async (apiKey: string, visualPrompt: string, aspectRatio: string = "3:4"): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (!apiKey || apiKey.trim() === '') {
+    throw new Error('API密钥未配置，请在设置中配置图片生成API密钥');
+  }
+  
+  // 清理提示词，移除可能的前缀
+  let cleanPrompt = visualPrompt.trim();
+  if (cleanPrompt.startsWith('英文生图提示词:') || cleanPrompt.startsWith('英文生图提示词：')) {
+    cleanPrompt = cleanPrompt.replace(/^英文生图提示词[：:]\s*/, '').trim();
+  }
+  // 移除可能的方括号
+  cleanPrompt = cleanPrompt.replace(/^\[|\]$/g, '').trim();
+  
+  // 映射宽高比：3:4 和 1:1 都支持，如果API不支持则使用最接近的
+  const apiAspectRatio = aspectRatio; // 直接使用，API应该支持 3:4 和 1:1
   
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: [{ parts: [{ text: visualPrompt }] }],
-      config: {
-        imageConfig: {
-          aspectRatio: (aspectRatio === "3:4" ? "3:4" : "1:1") as any
-        }
-      }
+    // 创建生成任务
+    const response = await fetch('https://router.shengsuanyun.com/api/v1/tasks/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        aspect_ratio: apiAspectRatio,
+        model: "google/gemini-3-pro-image-preview",
+        prompt: cleanPrompt,
+        response_modalities: ["IMAGE"],
+        size: "2K"
+      })
     });
-
-    const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-    if (part?.inlineData?.data) {
-      return `data:image/png;base64,${part.inlineData.data}`;
+    
+    if (!response.ok) {
+      const errorBody = await response.text();
+      let errorMessage = `API Error: ${response.status}`;
+      try {
+        const errorJson = JSON.parse(errorBody);
+        errorMessage += ` - ${errorJson.error?.message || errorJson.message || errorBody}`;
+      } catch {
+        errorMessage += ` - ${errorBody}`;
+      }
+      throw new Error(errorMessage);
     }
-    throw new Error("No image data");
+    
+    const taskData = await response.json();
+    
+    // 检查是否直接返回了图片URL
+    if (taskData.image) {
+      return taskData.image;
+    }
+    if (taskData.result?.image) {
+      return taskData.result.image;
+    }
+    if (taskData.images && taskData.images.length > 0) {
+      return taskData.images[0];
+    }
+    if (taskData.result?.images && taskData.result.images.length > 0) {
+      return taskData.result.images[0];
+    }
+    
+    // 如果有任务ID，需要轮询
+    const taskId = taskData.task_id || taskData.id || taskData.taskId;
+    if (taskId) {
+      return await pollTaskStatus(apiKey, taskId);
+    }
+    
+    // 如果任务已完成但没有图片，检查状态
+    if (taskData.status === 'completed' || taskData.status === 'succeeded') {
+      throw new Error('任务完成但未找到图片URL');
+    }
+    
+    throw new Error('无法获取任务ID或图片URL');
+    
   } catch (error) {
-    console.warn("Gemini Error, falling back to pollinations:", error);
+    console.warn("文生图API错误，使用pollinations备用方案:", error);
+    // 备用方案：使用 pollinations
     const cleanPrompt = encodeURIComponent(visualPrompt.substring(0, 350));
     const width = aspectRatio === "1:1" ? 1024 : 1080;
     const height = aspectRatio === "1:1" ? 1024 : 1440;

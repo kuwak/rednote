@@ -77,7 +77,7 @@ const App: React.FC = () => {
       updateStepStatus(5, 'active');
       const [copy, imageUrl] = await Promise.all([
         copyPromise,
-        generateCoverImage(state.llmApiKey, analysisResult.prompt)
+        generateCoverImage(state.imgApiKey || state.llmApiKey, analysisResult.prompt)
       ]);
       updateStepStatus(5, 'completed');
 
@@ -97,8 +97,10 @@ const App: React.FC = () => {
       }));
     } catch (error) {
       console.error("Generate error:", error);
-      alert('内容生成失败，请重试');
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+      alert(`内容生成失败：${errorMessage}\n\n请检查：\n1. API密钥是否正确配置\n2. 网络连接是否正常\n3. 产品信息是否完整`);
       setState(prev => ({ ...prev, isLoading: false }));
+      setLoadingSteps(prev => prev.map(s => ({ ...s, status: 'waiting' })));
     }
   };
 
