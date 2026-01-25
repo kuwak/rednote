@@ -15,6 +15,8 @@ interface Props {
 }
 
 const QualityCheckCard: React.FC<{ report: QualityReport }> = ({ report }) => {
+  if (!report) return null;
+
   return (
     <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm mb-6 animate-fade-in-up">
       <div className="flex items-center justify-between mb-4">
@@ -27,19 +29,19 @@ const QualityCheckCard: React.FC<{ report: QualityReport }> = ({ report }) => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {[
-          { label: '商业设计感', data: report.subject, icon: 'fa-eye' },
-          { label: '场景带入感', data: report.function, icon: 'fa-couch' },
-          { label: '光影高级感', data: report.structure, icon: 'fa-sun' },
-          { label: '构图平衡度', data: report.concept, icon: 'fa-border-all' }
+          { label: '商业设计感', data: report?.subject, icon: 'fa-eye' },
+          { label: '场景带入感', data: report?.function, icon: 'fa-couch' },
+          { label: '光影高级感', data: report?.structure, icon: 'fa-sun' },
+          { label: '构图平衡度', data: report?.concept, icon: 'fa-border-all' }
         ].map((item, idx) => (
           <div key={idx} className="flex flex-col gap-1.5 p-3 rounded-2xl bg-gray-50/50 border border-gray-100">
             <div className="flex justify-between items-center">
               <span className="text-xs font-bold text-gray-500 flex items-center gap-2">
                 <i className={`fas ${item.icon} text-[10px]`}></i> {item.label}
               </span>
-              <span className="text-xs font-black text-xhs-red">{item.data.score}<span className="text-[10px] text-gray-400 font-normal">/10</span></span>
+              <span className="text-xs font-black text-xhs-red">{item.data?.score || '-'}<span className="text-[10px] text-gray-400 font-normal">/10</span></span>
             </div>
-            <p className="text-[11px] text-gray-400 leading-snug">{item.data.reason}</p>
+            <p className="text-[11px] text-gray-400 leading-snug">{item.data?.reason || "暂无详细分析数据"}</p>
           </div>
         ))}
       </div>
