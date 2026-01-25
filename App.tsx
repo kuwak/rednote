@@ -5,7 +5,9 @@ import InputForm from './components/InputForm';
 import ResultPreview from './components/ResultPreview';
 import { generateCopywriting, generateImageAnalysisAndPrompt, generateCoverImage } from './services/api';
 
-const DEFAULT_LLM_KEY = 'qOAAQD7IMiQ8TjDl5lSIs225pLNltaPt7qa17g8aKbAJuiNCyZjW2B6tZGsKFvDF2ikkAFE6Ou6jEg';
+const DEFAULT_API_KEY = 'qOAAQD7IMiQ8TjDl5lSIs225pLNltaPt7qa17g8aKbAJuiNCyZjW2B6tZGsKFvDF2ikkAFE6Ou6jEg';
+const DEFAULT_LLM_KEY = DEFAULT_API_KEY;
+const DEFAULT_IMG_KEY = DEFAULT_API_KEY;
 
 interface LoadingStep {
   id: number;
@@ -38,7 +40,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const storedLlmKey = localStorage.getItem('rednote_llm_key') || DEFAULT_LLM_KEY;
-    setState(prev => ({ ...prev, llmApiKey: storedLlmKey, hasKeys: true }));
+    const storedImgKey = localStorage.getItem('rednote_img_key') || DEFAULT_IMG_KEY;
+    setState(prev => ({ ...prev, llmApiKey: storedLlmKey, imgApiKey: storedImgKey, hasKeys: true }));
   }, []);
 
   const updateStepStatus = (id: number, status: 'waiting' | 'active' | 'completed') => {
@@ -186,7 +189,11 @@ const App: React.FC = () => {
       <SettingsModal 
         isOpen={state.isSettingsOpen} 
         onClose={() => setState(prev => ({ ...prev, isSettingsOpen: false }))}
-        onSave={(l, i) => setState(prev => ({ ...prev, llmApiKey: l, imgApiKey: i, isSettingsOpen: false }))}
+        onSave={(l, i) => {
+          localStorage.setItem('rednote_llm_key', l);
+          localStorage.setItem('rednote_img_key', i);
+          setState(prev => ({ ...prev, llmApiKey: l, imgApiKey: i, isSettingsOpen: false }));
+        }}
         currentLlmKey={state.llmApiKey}
         currentImgKey={state.imgApiKey}
       />

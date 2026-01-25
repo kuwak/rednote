@@ -61,7 +61,7 @@ const SettingsModal: React.FC<Props> = ({ isOpen, onClose, onSave, currentLlmKey
             {/* Image Gen Key Input */}
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">
-                生图模型 API Key (Gemini)
+                生图模型 API Key (Doubao-Seedream)
               </label>
               <div className="relative">
                 <input

@@ -260,8 +260,8 @@ export const generateCoverImage = async (apiKey: string, visualPrompt: string, a
   // 移除可能的方括号
   cleanPrompt = cleanPrompt.replace(/^\[|\]$/g, '').trim();
   
-  // 映射宽高比：3:4 和 1:1 都支持，如果API不支持则使用最接近的
-  const apiAspectRatio = aspectRatio; // 直接使用，API应该支持 3:4 和 1:1
+  // 根据宽高比计算尺寸：1:1 使用 2048x2048，3:4 使用 1536x2048
+  const imageSize = aspectRatio === "1:1" ? "2048x2048" : "1536x2048";
   
   try {
     // 创建生成任务
@@ -272,11 +272,14 @@ export const generateCoverImage = async (apiKey: string, visualPrompt: string, a
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        aspect_ratio: apiAspectRatio,
-        model: "google/gemini-3-pro-image-preview",
+        model: "bytedance/doubao-seedream-4.5",
         prompt: cleanPrompt,
-        response_modalities: ["IMAGE"],
-        size: "2K"
+        sequential_image_generation: "auto",
+        sequential_image_generation_options: {
+          max_count: 1
+        },
+        size: imageSize,
+        watermark: false
       })
     });
     
