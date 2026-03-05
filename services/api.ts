@@ -136,42 +136,52 @@ export const generateCopywriting = async (apiKey: string, product: ProductInfo):
 
 export const generateImageAnalysisAndPrompt = async (apiKey: string, product: ProductInfo): Promise<{ analysis: ImageAnalysis, qualityReport: QualityReport, prompt: string }> => {
   const prompt = `
-    你是一位顶尖商业摄影策划。
-    任务：根据以下“黄金信息三角”为【${product.name}】策划一张小红书风格封面图并生成英文生图 Prompt。
+    你是一位顶尖小红书爆款封面摄影师。
+    任务：根据以下信息为【${product.name}】生成一个高质量的小红书风格营销封面图的英文提示词。
 
-    【黄金信息三角】
-    1. 产品主体：${product.name} (品类: ${product.category})
-    2. 物理细节：${product.features} (造型依据)
-    3. 卖点与调性：${product.sellingPoints} / 预期风格: ${product.tone}
-    4. 目标用户：${product.targetAudience} (决定场景精细度)
+    【产品信息】
+    - 产品名称：${product.name}
+    - 品类：${product.category}
+    - 核心卖点：${product.sellingPoints}
+    - 产品特点：${product.features}
+    - 目标用户：${product.targetAudience}
+    - 风格调性：${product.tone}
 
-    【封面策划要求 - 严格遵循模版】
-    - 主题与情绪：创造一个视觉故事（如：松弛的清晨），情绪需呼应“${product.tone}”。
-    - 视觉化卖点：如果卖点包含舒适/柔软/支撑，画面必须体现。特别是枕头类产品，必须呈现自然的【回弹凹陷感】，体现被头部压出的弧度，质感软糯实心。
-    - 场景与构图：将产品置于理想化场景（如：${product.targetAudience}向往的极简卧室）。
-    - 强化调性：生活化质感，电影感滤镜。
-    - 严禁：文字、价格、杂乱背景、完整人脸。
+    【小红书爆款封面核心要点】
+    1. 视觉冲击力：主体突出，画面干净通透
+    2. 氛围感：温暖柔和的生活场景，治愈系光线
+    3. 真实感：还原使用场景，有生活气息但不杂乱
+    4. 质感：高清8K画质，柔光箱级别布光，杂志级后期
+    5. 留白：适当留白让视线聚焦产品
 
-    请严格输出 JSON 对象：
+    【禁止出现】
+    - 文字、价格标签、水印
+    - 杂乱背景、穿帮镜头
+    - 过度PS的不真实感
+
+    请严格输出 JSON：
     {
       "analysis": {
         "form": "主体形态描述",
-        "texture": "质感描述",
-        "light": "光影方案",
-        "atmosphere": "情绪词",
+        "texture": "材质质感描述",
+        "light": "布光方案",
+        "atmosphere": "氛围关键词",
         "style": "摄影风格",
         "composition": "构图方案",
-        "setting": "场景环境描述"
+        "setting": "场景描述"
       },
       "qualityReport": {
-        "subject": {"score": 9.8, "reason": "描述形态符合度"},
-        "function": {"score": 9.5, "reason": "描述卖点视觉化程度"},
-        "structure": {"score": 9.9, "reason": "描述光影高级感"},
-        "concept": {"score": 9.7, "reason": "描述场景代入感"}
+        "subject": {"score": 9.8, "reason": "主体突出"},
+        "function": {"score": 9.5, "reason": "卖点可视化强"},
+        "structure": {"score": 9.9, "reason": "光影质感高级"},
+        "concept": {"score": 9.7, "reason": "场景代入感强"}
       },
-      "finalPrompt": "英文生图提示词: [A high-end commercial shot of ${product.name} featuring ${product.features} in a lifestyle setting for ${product.targetAudience}. Cinematic lighting, ergonomic pillow with soft head indentation, soft bed sheets, minimalist room, ${product.tone} atmosphere, 8k, photorealistic, shallow depth of field, minimalist aesthetic, no text.]"
+      "finalPrompt": "英文提示词"
     }
-  `;
+
+    【finalPrompt 英文提示词模板参考】
+    A premium ${product.category} product photography, ${product.name}, ${product.features}. Shot on Hasselblad medium format camera, soft natural daylight from window, warm color temperature 3500K, minimalist lifestyle scene with ${product.targetAudience} aesthetic, soft pastel background, shallow depth of field, bokeh effect, high-end magazine editorial style, 8K resolution, crystal clear detail, soft shadows, clean composition, trending on Xiaohongshu, lifestyle product shot, inviting atmosphere, no text, no watermark, no price tag, photorealistic, ultra-detailed."
+    `;
 
   const data = await callDeepSeek(apiKey, [{ role: "user", content: prompt }]);
   
@@ -210,7 +220,7 @@ const pollTaskStatus = async (apiKey: string, taskId: string, maxAttempts: numbe
     await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
     
     try {
-      const response = await fetch(`https://router.shengsuanyun.com/api/v1/tasks/${taskId}`, {
+      const response = await fetch(`https://router.shengsuanyun.com/api/v1/tasks/generations/${taskId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`
@@ -221,11 +231,18 @@ const pollTaskStatus = async (apiKey: string, taskId: string, maxAttempts: numbe
         throw new Error(`获取任务状态失败: ${response.status}`);
       }
       
-      const data = await response.json();
+      const json = await response.json();
+      const data = json.data || json;
       
-      // 检查任务状态
-      if (data.status === 'completed' || data.status === 'succeeded') {
-        // 查找图片URL
+      // 检查任务状态 - 注意是 COMPLETED（全大写）
+      if (data.status === 'COMPLETED' || data.status === 'completed' || data.status === 'succeeded') {
+        // 查找图片URL - 在 data.image_urls 中
+        if (data.data?.image_urls && data.data.image_urls.length > 0) {
+          return data.data.image_urls[0];
+        }
+        if (data.image_urls && data.image_urls.length > 0) {
+          return data.image_urls[0];
+        }
         if (data.result?.images && data.result.images.length > 0) {
           return data.result.images[0];
         }
@@ -241,8 +258,8 @@ const pollTaskStatus = async (apiKey: string, taskId: string, maxAttempts: numbe
         throw new Error('任务完成但未找到图片URL');
       }
       
-      if (data.status === 'failed' || data.status === 'error') {
-        throw new Error(`任务失败: ${data.error || data.message || '未知错误'}`);
+      if (data.status === 'FAILED' || data.status === 'failed' || data.status === 'error') {
+        throw new Error(`任务失败: ${data.fail_reason || data.error || data.message || '未知错误'}`);
       }
       
       // 继续轮询
@@ -270,11 +287,15 @@ export const generateCoverImage = async (apiKey: string, visualPrompt: string, a
   // 移除可能的方括号
   cleanPrompt = cleanPrompt.replace(/^\[|\]$/g, '').trim();
   
-  // 根据宽高比计算尺寸：1:1 使用 2048x2048，3:4 使用 1536x2048
+  const defaultImage = "https://shengsuanyun.oss-cn-shanghai.aliyuncs.com/modelinfo%2Fprod%2Finput_temp%2F%E5%B0%8F%E5%98%9F%2F283%2F2d6cf4e450d857e6.png";
+  const aspectRatioValue = aspectRatio === "1:1" ? "1:1" : aspectRatio === "3:4" ? "3:4" : "16:9";
+  
+  // 根据宽高比计算尺寸
   const imageSize = aspectRatio === "1:1" ? "2048x2048" : "1536x2048";
   
   try {
-    // 创建生成任务
+    // 创建生成任务 - 使用 google/gemini-3.1-flash-image-preview 模型（纯文生图）
+    // 注意：该模型不支持图像输入，如需图生图请换回 bytedance/doubao-seedream-4.5
     const response = await fetch('https://router.shengsuanyun.com/api/v1/tasks/generations', {
       method: 'POST',
       headers: {
@@ -282,14 +303,11 @@ export const generateCoverImage = async (apiKey: string, visualPrompt: string, a
         'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "bytedance/doubao-seedream-4.5",
+        model: "google/gemini-3.1-flash-image-preview",
         prompt: cleanPrompt,
-        sequential_image_generation: "auto",
-        sequential_image_generation_options: {
-          max_count: 1
-        },
-        size: imageSize,
-        watermark: false
+        aspect_ratio: aspectRatioValue,
+        response_modalities: ["IMAGE"],
+        size: "1K"
       })
     });
     
@@ -305,11 +323,15 @@ export const generateCoverImage = async (apiKey: string, visualPrompt: string, a
       throw new Error(errorMessage);
     }
     
-    const taskData = await response.json();
+    const json = await response.json();
+    const taskData = json.data || json;
     
     // 检查是否直接返回了图片URL
     if (taskData.image) {
       return taskData.image;
+    }
+    if (taskData.data?.image_urls && taskData.data.image_urls.length > 0) {
+      return taskData.data.image_urls[0];
     }
     if (taskData.result?.image) {
       return taskData.result.image;
@@ -321,14 +343,14 @@ export const generateCoverImage = async (apiKey: string, visualPrompt: string, a
       return taskData.result.images[0];
     }
     
-    // 如果有任务ID，需要轮询
-    const taskId = taskData.task_id || taskData.id || taskData.taskId;
+    // 如果有任务ID，需要轮询 - 注意是 request_id
+    const taskId = taskData.request_id || taskData.task_id || taskData.id || taskData.taskId;
     if (taskId) {
       return await pollTaskStatus(apiKey, taskId);
     }
     
     // 如果任务已完成但没有图片，检查状态
-    if (taskData.status === 'completed' || taskData.status === 'succeeded') {
+    if (taskData.status === 'COMPLETED' || taskData.status === 'completed' || taskData.status === 'succeeded') {
       throw new Error('任务完成但未找到图片URL');
     }
     

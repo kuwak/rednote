@@ -5,7 +5,7 @@ import InputForm from './components/InputForm';
 import ResultPreview from './components/ResultPreview';
 import { generateCopywriting, generateImageAnalysisAndPrompt, generateCoverImage } from './services/api';
 
-const DEFAULT_API_KEY = 'qOAAQD7IMiQ8TjDl5lSIs225pLNltaPt7qa17g8aKbAJuiNCyZjW2B6tZGsKFvDF2ikkAFE6Ou6jEg';
+const DEFAULT_API_KEY = '';
 const DEFAULT_LLM_KEY = DEFAULT_API_KEY;
 const DEFAULT_IMG_KEY = DEFAULT_API_KEY;
 
@@ -41,7 +41,8 @@ const App: React.FC = () => {
   useEffect(() => {
     const storedLlmKey = localStorage.getItem('rednote_llm_key') || DEFAULT_LLM_KEY;
     const storedImgKey = localStorage.getItem('rednote_img_key') || DEFAULT_IMG_KEY;
-    setState(prev => ({ ...prev, llmApiKey: storedLlmKey, imgApiKey: storedImgKey, hasKeys: true }));
+    const hasKeys = !!(storedLlmKey && storedLlmKey.trim() !== '');
+    setState(prev => ({ ...prev, llmApiKey: storedLlmKey, imgApiKey: storedImgKey, hasKeys }));
   }, []);
 
   const updateStepStatus = (id: number, status: 'waiting' | 'active' | 'completed') => {
